@@ -1,59 +1,90 @@
-const db = require('../database');
+const {
+  loginService,
+  signupService,
+  logoutService,
+  loggedInUserService,
+} = require("../services/userService");
+const { isValidEmail } = require("../helpers/emailValidation");
 
 // login user
 const loginUser = async (req, res) => {
+  try {
     const { email, password } = req.body;
 
-  const sql = 'SELECT * FROM users WHERE email = ? AND password = ?';
-  const values = [email, password];
-
-  db.query(sql, values, (err, results) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: 'Internal Server Error' });
+    if (!email || !isValidEmail(email)) {
+      throw new Error("error");
     }
 
-    if (results.length === 0) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+    if (!password) {
+      throw new Error("error");
     }
 
-    const user = results[0];
-    return res.json({ success: true, user: { firstName: user.firstname, lastName: user.lastname, email: user.email } });
-  });
-}
+    const result = await loginService(email, password);
+
+    if (result.success) {
+      return res.json({
+        success: result.success,
+        user: {
+          id: result.user.id,
+          firstName: result.user.firstName,
+          lastName: result.user.lastName,
+          email: result.user.email,
+        },
+        token: result.token,
+      });
+    }
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
 
 // signup user
 const signupUser = async (req, res) => {
+  try {
     const { firstName, lastName, email, password } = req.body;
 
-    // Check if the email already exists
-    const checkEmailQuery = 'SELECT COUNT(*) AS count FROM users WHERE email = ?';
-    db.query(checkEmailQuery, [email], (checkEmailError, checkEmailResults) => {
-        if (checkEmailError) {
-            console.error(checkEmailError);
-            return res.status(500).json({ error: 'Internal Server Error' });
-        }
+    if (!firstName) {
+      throw new Error("Enter the First Name");
+    }
 
-        const emailExists = checkEmailResults[0].count > 0;
+    if (!lastName) {
+      throw new Error("Enter the Last Name");
+    }
 
-        if (emailExists) {
-            return res.status(400).json({ error: 'Email already exists' });
-        }
+    if (!email || !isValidEmail(email)) {
+      throw new Error("Enter a valid email");
+    }
 
-        // If email is unique, proceed with insertion
-        const insertUserQuery = 'INSERT INTO users (firstName, lastName, email, password) VALUES (?, ?, ?, ?)';
-        const values = [firstName, lastName, email, password];
+    if (!password) {
+      throw new Error("Enter the password");
+    }
 
-        db.query(insertUserQuery, values, (insertError, result) => {
-            if (insertError) {
-                console.error(insertError);
-                return res.status(500).json({ error: 'Internal Server Error' });
-            }
+    await signupService(firstName, lastName, email, password);
 
-            console.log('User added to the database');
-            res.json({ success: true });
-        });
-    });
-}
+    res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
 
-module.exports = { loginUser, signupUser };
+// logout user
+const logoutUser = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    // Perform logout
+    await logoutService(email);
+
+    res.status(200).json({ success: true, message: "Logout successful." });
+  } catch (error) {
+    res.status(500).json({ error });
+  }
+};
+
+// loggedIn user details
+const loggedInUserDetails = async (req, res) => {
+  const userData = await loggedInUserService(req.user.email);
+  res.status(200).json({ success: true, message: "fetched", data: userData });
+};
+
+module.exports = { loginUser, signupUser, logoutUser, loggedInUserDetails };
